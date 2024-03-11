@@ -45,15 +45,16 @@ echo "Security group created: $SG_ID"
 # Allow SSH (port 22) on security group
 aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
 
-# Check if a key pair with the specified name already exists to avoid errors
-EXISTING_KEY=$(aws ec2 describe-key-pairs --key-names $KEY_NAME --query 'KeyPairs[0].KeyName' --output text 2>&1)
-if [ "$EXISTING_KEY" == "None" ] || [ "$EXISTING_KEY" == "An error occurred" ]; then
-  # Create SSH key pair if it does not exist
-  aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text > ${KEY_NAME}.pem
-  chmod 400 ${KEY_NAME}.pem
+# Check if a key pair with the specified name exists and create if it does not
+EXISTING_KEY=$(aws ec2 describe-key-pairs --key-names $KEY_NAME --query 'KeyPairs[].KeyName' --output text --region $REGION 2>&1)
+if echo $EXISTING_KEY | grep -q 'InvalidKeyPair.NotFound'; then
+  # The key pair does not exist, so create it
+  echo "Key pair $KEY_NAME does not exist. Creating key pair..."
+  aws ec2 create-key-pair --key-name $KEY_NAME --query 'KeyMaterial' --output text --region $REGION > "${KEY_NAME}.pem"
+  chmod 400 "${KEY_NAME}.pem"
   echo "Key pair created and saved as ${KEY_NAME}.pem"
 else
-  echo "Key pair $KEY_NAME already exists. Skipping creation."
+  echo "Key pair $KEY_NAME already exists. Using existing key pair."
 fi
 
 # Launch EC2 instances
